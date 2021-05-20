@@ -25,10 +25,10 @@ use winapi::um::ioapiset::DeviceIoControl;
 use winapi::um::sysinfoapi::{GetSystemInfo, SYSTEM_INFO};
 use winapi::um::winbase::DRIVE_FIXED;
 use winapi::um::winioctl::{
-    DEVICE_TRIM_DESCRIPTOR, IOCTL_DISK_GET_PARTITION_INFO_EX, IOCTL_STORAGE_QUERY_PROPERTY,
-    PARTITION_INFORMATION_EX, STORAGE_PROPERTY_QUERY,
+    DEVICE_TRIM_DESCRIPTOR, IOCTL_DISK_GET_LENGTH_INFO, IOCTL_STORAGE_QUERY_PROPERTY,
+    GET_LENGTH_INFORMATION, STORAGE_PROPERTY_QUERY,
 };
-use winapi::um::winnt::{FILE_SHARE_READ, FILE_SHARE_WRITE, HANDLE};
+use winapi::um::winnt::{FILE_SHARE_READ, FILE_SHARE_WRITE, GENERIC_READ, HANDLE};
 
 pub struct KeyHandler {
     pub unique_id: String,
@@ -73,20 +73,20 @@ pub unsafe fn open_drive(drive_name: &[u16], open_rights: DWORD) -> HANDLE {
 }
 
 pub unsafe fn get_drive_size(handle: HANDLE) -> u64 {
-    let mut pdg: PARTITION_INFORMATION_EX = std::mem::zeroed();
+    let mut pdg: GET_LENGTH_INFORMATION = std::mem::zeroed();
     let mut junk = 0;
     let result = DeviceIoControl(
         handle,
-        IOCTL_DISK_GET_PARTITION_INFO_EX,
+        IOCTL_DISK_GET_LENGTH_INFO,
         std::ptr::null_mut(),
         0,
-        &mut pdg as *mut PARTITION_INFORMATION_EX as *mut c_void,
-        size_of::<PARTITION_INFORMATION_EX>() as DWORD,
+        &mut pdg as *mut GET_LENGTH_INFORMATION as *mut c_void,
+        size_of::<GET_LENGTH_INFORMATION>() as DWORD,
         &mut junk,
         std::ptr::null_mut(),
     );
     if result == TRUE {
-        *pdg.PartitionLength.QuadPart() as u64
+        *pdg.Length.QuadPart() as u64
     } else {
         0
     }
@@ -158,7 +158,7 @@ pub unsafe fn get_disks() -> Vec<Disk> {
                 b':' as u16,
                 0,
             ];
-            let handle = open_drive(&drive_name, 0);
+            let handle = open_drive(&drive_name, GENERIC_READ);
             if handle == INVALID_HANDLE_VALUE {
                 CloseHandle(handle);
                 return new_disk(
